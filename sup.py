@@ -9,8 +9,8 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import asyncio
 
 # Конфигурация
-ADMIN_ID = 6841069738  # Замените на ваш ID
-BOT_TOKEN = "8236028131:AAGtNs2u5peukZ96P3UbBF5BfQQ1W2qaR2I"
+ADMIN_ID = 1234567890  # Замените на ваш ID
+BOT_TOKEN = "твой токен/your token"
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -477,4 +477,5 @@ async def main():
 
 if __name__ == "__main__":
     print("Бот запущен...")
+
     asyncio.run(main())
