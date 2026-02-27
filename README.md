@@ -146,3 +146,137 @@ MIT License
 ---
 
 Примечание: Не забудьте заменить токен бота и ID администратора перед запуском!
+
+# Telegram Support Bot
+
+## Description
+
+A Telegram bot for managing user inquiries to the administrator. Users can send messages and media files, while the administrator can reply, ban users, and track statistics.
+
+## Functionality
+
+### For Users:
+*   📨 Send text messages to the administrator
+*   📸 Send photos, documents, videos, and audio files
+*   ✅ Receive delivery confirmation
+*   🔔 Get notifications when the administrator reads messages
+
+### For Administrator:
+*   👁 View all messages from users
+*   🔨 Ban users
+*   💬 Reply to users (text, photos, documents, videos, audio)
+*   ✓ Mark messages as read
+*   📊 View statistics (`/stats` command)
+*   🔓 Unban users (`/unb` command)
+*   ❌ Cancel actions (`/cancel` command)
+
+## Installation
+
+### Requirements
+*   Python 3.8+
+*   Telegram Bot Token (obtain from @BotFather)
+
+### Install Dependencies
+```bash
+pip install aiogram sqlite3 logging
+```
+*(Note: `sqlite3` is usually included in the standard Python library, so `pip install aiogram logging` is often sufficient).*
+
+### Configuration
+
+1.  Replace `ADMIN_ID` with your Telegram ID in the code:
+    ```python
+    ADMIN_ID = 6841069738  # Replace with your ID
+    ```
+
+2.  Set the bot token:
+    ```python
+    BOT_TOKEN = "YOUR_BOT_TOKEN"
+    ```
+
+3.  Run the bot:
+    ```bash
+    python sup.py
+    ```
+
+## Commands
+
+**General Commands:**
+*   `/start` - Start working with the bot
+*   `/help` - Get help on how to use the bot
+
+**Administrator Commands:**
+*   `/stats` - Show bot statistics
+*   `/unb <user_id or username>` - Unban a user
+*   `/cancel` - Cancel the current action (e.g., replying to a user)
+
+## Database Operation
+
+The bot uses an SQLite database named `support_bot.db` with two tables:
+
+**Table `users`:**
+*   `user_id` - Telegram User ID (PRIMARY KEY)
+*   `username` - Telegram Username
+*   `is_banned` - Ban status (0 - active, 1 - banned)
+
+**Table `messages`:**
+*   `message_id` - Message ID (AUTOINCREMENT)
+*   `user_id` - Sender ID (FOREIGN KEY)
+*   `admin_message_id` - Message ID in the administrator's chat
+*   `status` - Message status ('new', 'read')
+
+## Keyboards
+
+**Administrator Keyboard:**
+Contains buttons for managing inquiries:
+*   🔨 **Ban** - Block the user
+*   💬 **Reply** - Reply to the user
+*   ✓ **Read** - Mark the message as read
+
+## Features
+
+1.  **Automatic DB Creation** - The database is created automatically upon the first launch.
+2.  **Logging** - All errors are logged for debugging purposes.
+3.  **Security** - Administrator rights are verified before executing commands.
+4.  **Media Handling** - Supports all Telegram file types.
+5.  **Message Statuses** - Tracks read/unread message statuses.
+
+## Usage Examples
+
+**Sending a message as a user:**
+```
+User: Hello, I have a question regarding order #123
+Bot: ✅ Your message has been sent to the administrator.
+```
+
+**Administrator reply:**
+```
+Admin: [clicks "Reply"] ✍️ Enter a response for user 123456789
+Admin: Your order #123 has been processed, please await delivery.
+User: 📨 Response from administrator: Your order #123 has been processed, please await delivery.
+```
+
+## Logging
+
+The bot performs logging at the `INFO` level. Logs include:
+*   Errors during message sending
+*   Database operation errors
+*   Administrator actions
+
+## Troubleshooting
+
+1.  **Bot is not responding** - Check the bot token and internet connection.
+2.  **Database errors** - Delete the `support_bot.db` file to reset the database.
+3.  **Admin commands not working** - Verify that `ADMIN_ID` is correct.
+
+## License
+
+MIT License
+
+## Support
+
+For questions and suggestions, contact @deco9er on Telegram.
+
+---
+
+**Note:** Don't forget to replace the bot token and administrator ID before launching!
