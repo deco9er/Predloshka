@@ -8,23 +8,18 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import asyncio
 
-# Конфигурация
-ADMIN_ID = 1234567890  # Замените на ваш ID
+ADMIN_ID = 1234567890
 BOT_TOKEN = "твой токен/your token"
 
-# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Инициализация бота и диспетчера
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Подключение к БД
 conn = sqlite3.connect('support_bot.db', check_same_thread=False)
 cursor = conn.cursor()
 
-# Создание таблиц
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY,
@@ -44,35 +39,26 @@ CREATE TABLE IF NOT EXISTS messages (
 ''')
 conn.commit()
 
-# FSM состояния
 class AdminReply(StatesGroup):
     waiting_for_reply = State()
 
-# Клавиатура для админа
-# Исправленная функция get_admin_keyboard
 def get_admin_keyboard(user_id, message_id=None):
     """
     Создает клавиатуру для админа.
     Если message_id равен None, кнопка 'Прочитано' не добавляется.
     """
-    builder = InlineKeyboardBuilder()
-    
-    # Всегда добавляем кнопки "Забанить" и "Ответить"
-    builder.add(
+    keyboard = InlineKeyboardBuilder()
+    keyboard.add(
         InlineKeyboardButton(text="🔨 Забанить", callback_data=f"ban_{user_id}"),
         InlineKeyboardButton(text="💬 Ответить", callback_data=f"reply_{user_id}")
     )
     
-    # Добавляем кнопку "Прочитано" только если передан message_id
     if message_id is not None:
-        builder.add(InlineKeyboardButton(text="✓ Прочитано", callback_data=f"read_{message_id}"))
-    
-    # Настраиваем расположение кнопок (2 в первом ряду, 1 во втором если есть)
-    builder.adjust(2, 1)
-    
-    return builder.as_markup()
+        keyboard.add(InlineKeyboardButton(text="✓ Прочитано", callback_data=f"read_{message_id}"))
 
-# Исправленный обработчик нажатий на кнопки админа
+    keyboard.adjust(2, 1)
+    return keyboard.as_markup()
+
 @dp.callback_query(F.data.startswith(('ban_', 'reply_', 'read_')))
 async def admin_callback_handler(callback: types.CallbackQuery, state: FSMContext):
     if callback.from_user.id != ADMIN_ID:
@@ -84,11 +70,9 @@ async def admin_callback_handler(callback: types.CallbackQuery, state: FSMContex
     if data.startswith('ban_'):
         user_id = int(data.split('_')[1])
         
-        # Баним пользователя
         cursor.execute("UPDATE users SET is_banned = 1 WHERE user_id = ?", (user_id,))
         conn.commit()
         
-        # Уведомляем пользователя
         try:
             await bot.send_message(user_id, "🚫 Вы были заблокированы администратором.")
         except:
@@ -96,14 +80,13 @@ async def admin_callback_handler(callback: types.CallbackQuery, state: FSMContex
         
         await callback.message.edit_text(
             callback.message.text + "\n\n✅ Пользователь заблокирован.",
-            reply_markup=None  # Убираем все кнопки после бана
+            reply_markup=None
         )
         await callback.answer()
         
     elif data.startswith('reply_'):
         user_id = int(data.split('_')[1])
         
-        # Сохраняем ID пользователя для ответа
         await state.update_data(reply_to_user=user_id)
         await state.set_state(AdminReply.waiting_for_reply)
         
@@ -111,10 +94,8 @@ async def admin_callback_handler(callback: types.CallbackQuery, state: FSMContex
         await callback.answer()
         
     elif data.startswith('read_'):
-        # Безопасно извлекаем message_id, проверяя что это число
         try:
             message_id_str = data.split('_')[1]
-            # Если это строка 'None' или пустая, пропускаем
             if message_id_str == 'None' or not message_id_str:
                 await callback.answer("❌ Не удалось отметить как прочитанное: отсутствует ID сообщения")
                 return
@@ -125,11 +106,9 @@ async def admin_callback_handler(callback: types.CallbackQuery, state: FSMContex
             logger.error(f"Ошибка при обработке callback_data '{data}': {e}")
             return
         
-        # Помечаем сообщение как прочитанное
         cursor.execute("UPDATE messages SET status = 'read' WHERE admin_message_id = ?", (message_id,))
         conn.commit()
         
-        # Получаем user_id из сообщения
         cursor.execute("SELECT user_id FROM messages WHERE admin_message_id = ?", (message_id,))
         result = cursor.fetchone()
         
@@ -140,32 +119,27 @@ async def admin_callback_handler(callback: types.CallbackQuery, state: FSMContex
             except:
                 pass
             
-            # Убираем кнопки ВСЕХ сообщений от этого пользователя
             cursor.execute("SELECT admin_message_id FROM messages WHERE user_id = ? AND status = 'new'", (user_id,))
             all_messages = cursor.fetchall()
             
             for msg in all_messages:
                 try:
-                    # Пытаемся получить сообщение по его ID
                     msg_id = msg[0]
-                    # Обновляем текст, убирая кнопки
                     await bot.edit_message_reply_markup(
                         chat_id=ADMIN_ID,
                         message_id=msg_id,
                         reply_markup=None
                     )
-                    # Обновляем статус в БД
                     cursor.execute("UPDATE messages SET status = 'read' WHERE admin_message_id = ?", (msg_id,))
                 except Exception as e:
                     logger.error(f"Не удалось обновить сообщение {msg[0]}: {e}")
             
             conn.commit()
         
-        # Редактируем текущее сообщение
         try:
             await callback.message.edit_text(
                 callback.message.text + "\n\n✓ Помечено как прочитанное",
-                reply_markup=None  # Полностью убираем клавиатуру
+                reply_markup=None
             )
         except Exception as e:
             logger.error(f"Не удалось отредактировать сообщение: {e}")
@@ -173,24 +147,20 @@ async def admin_callback_handler(callback: types.CallbackQuery, state: FSMContex
         
         await callback.answer()
 
-# Обработчик команды /start
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
     user_id = message.from_user.id
     username = message.from_user.username
     
-    # Сохраняем пользователя в БД
     cursor.execute("INSERT OR IGNORE INTO users (user_id, username) VALUES (?, ?)", (user_id, username))
     conn.commit()
     
     await message.answer("👋 Привет! Отправьте ваше сообщение для связи с администратором.")
 
-# Обработчик команды /help
 @dp.message(Command("help"))
 async def help_handler(message: types.Message):
     await message.answer("ℹ️ Отправьте любое сообщение или файл для связи с администратором.")
 
-# Обработчик команды /unb для разбана
 @dp.message(Command("unb"))
 async def unban_command(message: types.Message):
     if message.from_user.id != ADMIN_ID:
@@ -204,7 +174,6 @@ async def unban_command(message: types.Message):
     
     identifier = args[1].lstrip('@')
     
-    # Пытаемся найти пользователя
     if identifier.isdigit():
         cursor.execute("SELECT user_id, username FROM users WHERE user_id = ?", (int(identifier),))
     else:
@@ -218,11 +187,9 @@ async def unban_command(message: types.Message):
     
     user_id, username = user
     
-    # Разбаниваем
     cursor.execute("UPDATE users SET is_banned = 0 WHERE user_id = ?", (user_id,))
     conn.commit()
     
-    # Уведомляем пользователя
     try:
         await bot.send_message(user_id, "✅ Вы были разблокированы администратором.")
     except Exception as e:
@@ -230,7 +197,6 @@ async def unban_command(message: types.Message):
     
     await message.answer(f"✅ Пользователь {username or user_id} разблокирован.")
 
-# Обработчик команды /stats для статистики
 @dp.message(Command("stats"))
 async def stats_command(message: types.Message):
     if message.from_user.id != ADMIN_ID:
@@ -259,7 +225,6 @@ async def stats_command(message: types.Message):
     
     await message.answer(stats_text)
 
-# Обработчик команды /cancel для отмены состояния
 @dp.message(Command("cancel"))
 async def cancel_handler(message: types.Message, state: FSMContext):
     current_state = await state.get_state()
@@ -269,25 +234,21 @@ async def cancel_handler(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer("❌ Действие отменено.")
 
-# Обработчик всех сообщений от пользователей (кроме команд)
 @dp.message(F.chat.type == "private")
 async def user_message_handler(message: types.Message, state: FSMContext):
-    # Проверяем, является ли сообщение командой
     if message.text and message.text.startswith('/'):
-        return  # Игнорируем команды, они обрабатываются отдельно
+        return
     
     user_id = message.from_user.id
     username = message.from_user.username
     current_state = await state.get_state()
     
-    # Если админ в состоянии ожидания ответа
     if user_id == ADMIN_ID and current_state == AdminReply.waiting_for_reply.state:
         data = await state.get_data()
         reply_to_user = data.get('reply_to_user')
         
         if reply_to_user:
             try:
-                # Отправляем ответ пользователю
                 if message.text:
                     await bot.send_message(
                         reply_to_user,
@@ -332,7 +293,6 @@ async def user_message_handler(message: types.Message, state: FSMContext):
             await state.clear()
         return
     
-    # Проверяем не забанен ли пользователь (кроме админа)
     if user_id != ADMIN_ID:
         cursor.execute("SELECT is_banned FROM users WHERE user_id = ?", (user_id,))
         user = cursor.fetchone()
@@ -341,11 +301,9 @@ async def user_message_handler(message: types.Message, state: FSMContext):
             await message.answer("🚫 Вы заблокированы и не можете отправлять сообщения.")
             return
     
-    # Сохраняем пользователя (кроме админа)
     if user_id != ADMIN_ID:
         cursor.execute("INSERT OR REPLACE INTO users (user_id, username, is_banned) VALUES (?, ?, 0)", (user_id, username))
     
-    # Если сообщение от обычного пользователя, пересылаем админу
     if user_id != ADMIN_ID:
         try:
             if message.text:
@@ -358,7 +316,6 @@ async def user_message_handler(message: types.Message, state: FSMContext):
                     reply_markup=get_admin_keyboard(user_id)
                 )
             else:
-                # Для медиафайлов
                 if message.photo:
                     file_id = message.photo[-1].file_id
                     sent = await bot.send_photo(
@@ -399,7 +356,6 @@ async def user_message_handler(message: types.Message, state: FSMContext):
                     )
                 sent_msg = sent
                 
-            # Сохраняем в БД
             cursor.execute("INSERT INTO messages (user_id, admin_message_id) VALUES (?, ?)", (user_id, sent_msg.message_id))
             conn.commit()
             
@@ -409,7 +365,6 @@ async def user_message_handler(message: types.Message, state: FSMContext):
             logger.error(f"Ошибка при пересылке сообщения: {e}")
             await message.answer("❌ Произошла ошибка при отправке сообщения.")
 
-# Обработчик нажатий на кнопки админа
 @dp.callback_query(F.data.startswith(('ban_', 'reply_', 'read_')))
 async def admin_callback_handler(callback: types.CallbackQuery, state: FSMContext):
     if callback.from_user.id != ADMIN_ID:
@@ -421,11 +376,9 @@ async def admin_callback_handler(callback: types.CallbackQuery, state: FSMContex
     if data.startswith('ban_'):
         user_id = int(data.split('_')[1])
         
-        # Баним пользователя
         cursor.execute("UPDATE users SET is_banned = 1 WHERE user_id = ?", (user_id,))
         conn.commit()
         
-        # Уведомляем пользователя
         try:
             await bot.send_message(user_id, "🚫 Вы были заблокированы администратором.")
         except:
@@ -440,7 +393,6 @@ async def admin_callback_handler(callback: types.CallbackQuery, state: FSMContex
     elif data.startswith('reply_'):
         user_id = int(data.split('_')[1])
         
-        # Сохраняем ID пользователя для ответа
         await state.update_data(reply_to_user=user_id)
         await state.set_state(AdminReply.waiting_for_reply)
         
@@ -450,11 +402,9 @@ async def admin_callback_handler(callback: types.CallbackQuery, state: FSMContex
     elif data.startswith('read_'):
         message_id = int(data.split('_')[1])
         
-        # Помечаем сообщение как прочитанное
         cursor.execute("UPDATE messages SET status = 'read' WHERE admin_message_id = ?", (message_id,))
         conn.commit()
         
-        # Получаем user_id из сообщения
         cursor.execute("SELECT user_id FROM messages WHERE admin_message_id = ?", (message_id,))
         result = cursor.fetchone()
         
@@ -471,7 +421,6 @@ async def admin_callback_handler(callback: types.CallbackQuery, state: FSMContex
         )
         await callback.answer()
 
-# Запуск бота
 async def main():
     await dp.start_polling(bot)
 
